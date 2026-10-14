@@ -7,7 +7,11 @@ can be compiled by the Xcode application.
 
 Homepage:
 
-http://www.sopht.jp/cleanarchiver/
+http://www.sopht.jp/cleanarchiver/ (original)
+https://github.com/minola68000/CleanArchiverNeo (CleanArchiverNeo fork)
+
+Please report issues with this fork to the GitHub repository above,
+not to the original authors.
 
 Authors:
 

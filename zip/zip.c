@@ -51,6 +51,9 @@
 
 #include <signal.h>
 #include <stdio.h>
+#if defined(UNIX) && defined(__APPLE__)
+#  include <langinfo.h>
+#endif
 
 #ifdef UNICODE_TEST
 # ifdef WIN32

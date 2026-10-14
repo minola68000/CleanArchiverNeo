@@ -307,11 +307,11 @@ svr4package:
 
 macosx:
 	@case "$(ARCH)" in					\
-	i386|ppc|x86_64)					\
-		$(MAKE) $(MAKEF) generic CC="gcc -arch $(ARCH)"	\
+	i386|ppc|x86_64|arm64|arm64e)				\
+		$(MAKE) $(MAKEF) generic CC="clang -arch $(ARCH)"	\
 		;;						\
 	*)							\
-		$(MAKE) $(MAKEF) generic			\
+		$(MAKE) $(MAKEF) generic CC="clang"		\
 		;;						\
 	esac
 

@@ -55,13 +55,15 @@ enum archiveType {
     BOOL _excludeMacFiles;
     NSArray *_excludedFiles;
     BOOL _internetEnabledDMG;
+    BOOL _launchFailed;
 }
 
 - (id)init;
 - (void)dealloc;
 
 // Task management methods
-- (void)launch;
+- (BOOL)launch;
+- (BOOL)launchSucceeded;
 - (void)resume;
 - (void)suspend;
 - (void)terminate;

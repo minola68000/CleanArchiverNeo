@@ -40,11 +40,6 @@
     nc = [NSNotificationCenter defaultCenter];
 
     if (self = [super init]) {
-	[nc addObserver:self
-	    selector:@selector(taskDidTerminate:)
-	    name:NSTaskDidTerminateNotification 
-	    object:_task];
-
 	[self setCurrentDirectoryPath:@""];
 	[self setInput:nil];
 	[self setOutput:nil];
@@ -55,9 +50,16 @@
 	[self setExcludeMacFiles:NO];
 	[self setExcludedFiles:nil];
 
+	_launchFailed = NO;
+
 	_task = [[NSTask alloc] init];
 	[_task setLaunchPath:[[[NSBundle mainBundle] bundlePath]
 	    stringByAppendingString:@"/Contents/Resources/carc"]];
+
+	[nc addObserver:self
+	    selector:@selector(taskDidTerminate:)
+	    name:NSTaskDidTerminateNotification
+	    object:_task];
     }
     return self;
 }
@@ -73,6 +75,9 @@
 
     [_input release];
     [_output release];
+    [_archivePassword release];
+    [_encoding release];
+    [_excludedFiles release];
     [_task release];
     [super dealloc];
 }
@@ -80,11 +85,14 @@
 #pragma mark -
 #pragma mark Running and Stopping a Task
 
-- (void)launch
+- (BOOL)launch
 {
     NSString *path;
     NSMutableArray *args;
+    NSMutableDictionary *env;
     int i;
+
+    _launchFailed = NO;
 
     args = [[NSMutableArray alloc] init];
 
@@ -115,18 +123,13 @@
 	goto fail;
     }
 
-    if (_archivePassword != nil) {
-	[args addObject:@"-P"];
-	[args addObject:_archivePassword];
-    }
-
     if (_compressionLevel != -1)
 	[args addObject:[NSString stringWithFormat:@"-%d", _compressionLevel]];
 
     if (_discardRsrc)
 	[args addObject:@"-R"];
 
-    if (_encoding != nil) {
+    if (_encoding != nil && [_encoding length] > 0) {
 	[args addObject:@"-E"];
 	[args addObject:_encoding];
     }
@@ -136,6 +139,9 @@
 
     if (_excludeMacFiles)
 	[args addObject:@"-C"];
+
+    if (_internetEnabledDMG && _archiveType == DMG)
+	[args addObject:@"-I"];
 
     for (i = 0; i < [_excludedFiles count]; i++) {
 	[args addObject:@"-x"];
@@ -148,8 +154,11 @@
     path = [NSString stringWithFormat:@"%@:/usr/local/bin:/usr/pkg/bin", path];
     path = [NSString stringWithFormat:@"%@:/opt/local/bin:/sw/bin", path];
 
-    [_task setEnvironment:[NSDictionary dictionaryWithObject:path
-		   forKey:@"PATH"]];
+    env = [NSMutableDictionary dictionaryWithObject:path forKey:@"PATH"];
+    if (_archivePassword != nil && [_archivePassword length] > 0)
+	[env setObject:_archivePassword forKey:@"CARC_PASSWORD"];
+
+    [_task setEnvironment:env];
 
     if ([_output isKindOfClass:[NSFileHandle class]] ||
 	[_output isKindOfClass:[NSPipe class]]) {
@@ -172,10 +181,25 @@
 	goto fail;
 
     [_task setArguments:args];
-    [_task launch];
+    [args release];
+
+    @try {
+	[_task launch];
+    } @catch (NSException *e) {
+	_launchFailed = YES;
+	return NO;
+    }
+    return YES;
 
 fail:
     [args release];
+    _launchFailed = YES;
+    return NO;
+}
+
+- (BOOL)launchSucceeded
+{
+    return !_launchFailed;
 }
 
 - (void)resume
@@ -207,6 +231,8 @@ fail:
 
 - (int)terminationStatus
 {
+    if (_launchFailed)
+	return 1;
 
     return [_task terminationStatus];
 }

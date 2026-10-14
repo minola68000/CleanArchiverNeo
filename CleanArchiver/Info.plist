@@ -48,11 +48,13 @@
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>SUEnableAutomaticChecks</key>
-	<string>true</string>
+	<false/>
+	<key>SUAllowsAutomaticUpdates</key>
+	<false/>
 	<key>SUFeedURL</key>
-	<string>https://www.sopht.jp/cleanarchiver/appcast.xml</string>
+	<string></string>
 	<key>SUPublicEDKey</key>
-	<string>3SBxMzLI1RDjRfXyrfeERTmFR2FtcaA0q7VTIDELmEw=</string>
+	<string></string>
 	<key>SUShowReleaseNotes</key>
 	<string>false</string>
 </dict>

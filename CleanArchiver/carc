@@ -1,4 +1,6 @@
-#!/usr/bin/ruby
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+# encoding: utf-8
 #
 # carc:
 # 	Command line version of CleanArchiver
@@ -29,10 +31,7 @@
 
 require 'optparse'
 
-$KCODE = 'UTF8'
-
-
-MACSPECS = ['._*', '.DS_Store', 'icon\r']
+MACSPECS = ['._*', '.DS_Store', "icon\r"]
 
 def check_cmd(cmd)
   if !system('/usr/bin/which', '-s', cmd)
@@ -78,6 +77,11 @@ ARGV.options do |opt|
   opt.on('-z',		'Create zip archive')		{ |v| format = 'zip' }
 
   opt.parse!
+end
+
+if password == '' && ENV.key?('CARC_PASSWORD')
+  password = ENV['CARC_PASSWORD'].to_s
+  ENV.delete('CARC_PASSWORD')
 end
 
 dst = ARGV.shift
@@ -198,6 +202,8 @@ when 'dmg'
     cmdline.push('-P', password)
   end
 
+  cmdline.push('-i') if dmg_ie
+
   xfiles.each do |pat|
     cmdline.push('-x', pat)
   end
@@ -206,9 +212,8 @@ when 'dmg'
 
   system(*cmdline)
 when 'rar'
-  check_cmd('rar')
-
-  cmdline = ['rar']
+  warn('rar format is not supported')
+  exit(1)
 when 'zip'
   check_cmd('zip')
 
@@ -244,7 +249,15 @@ when 'zip'
   if FileTest.exist?(dst)
     File.unlink(dst)
   end
-  system(*cmdline)
+  unless system(*cmdline)
+    st = $?.exitstatus
+    # Info-ZIP exit 18 = warning (e.g. AppleDouble); archive may still be valid
+    if st == 18 && dst != '-' && FileTest.file?(dst) && FileTest.size(dst) > 0
+      # treat as success (matches legacy carc behaviour for GUI)
+    else
+      exit(st.nil? || st.zero? ? 1 : st)
+    end
+  end
 else
   warn('no archive format is specified')
   exit(1)

@@ -30,12 +30,20 @@
 
 @implementation CAView
 
+- (void)registerFileURLDragTypes
+{
+    [self registerForDraggedTypes:
+	[NSArray arrayWithObject:(NSString *)NSPasteboardTypeFileURL]];
+}
+
 #pragma mark -
 #pragma mark Responding to Being Loaded from a Nib File
 
 - (void)awakeFromNib
 {
     NSString *path;
+
+    [self registerFileURLDragTypes];
 
     path = [[[NSBundle mainBundle] bundlePath]
 	    stringByAppendingString:@"/Contents/Resources/bgactive.png"];
@@ -51,8 +59,7 @@
 {
 
     if (self = [super initWithFrame:frameRect]) {
-	[self registerForDraggedTypes:
-	    [NSArray arrayWithObjects:NSFilenamesPboardType, nil]];
+	[self registerFileURLDragTypes];
 	_dragSessionInProgress = NO;
     }
     return self;
@@ -127,10 +134,32 @@
     NSArray *filenames;
     NSNotificationCenter *nc;
     NSPasteboard *pb;
+    NSArray *urls;
+    NSEnumerator *en;
+    NSURL *url;
 
     nc = [NSNotificationCenter defaultCenter];
     pb = [sender draggingPasteboard];
-    filenames = [pb propertyListForType:NSFilenamesPboardType];
+    urls = [pb readObjectsForClasses:[NSArray arrayWithObject:[NSURL class]]
+			     options:[NSDictionary
+				 dictionaryWithObject:[NSNumber numberWithBool:YES]
+						 forKey:NSPasteboardURLReadingFileURLsOnlyKey]];
+    if (urls == nil || [urls count] == 0)
+	return NO;
+
+    {
+	NSMutableArray *paths;
+
+	paths = [NSMutableArray arrayWithCapacity:[urls count]];
+	en = [urls objectEnumerator];
+	while ((url = [en nextObject]) != nil) {
+	    if ([url isFileURL])
+		[paths addObject:[url path]];
+	}
+	filenames = paths;
+    }
+    if ([filenames count] == 0)
+	return NO;
 
     [nc postNotificationName:AOFilesDroppedNotification object:filenames];
     return YES;

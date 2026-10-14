@@ -178,15 +178,9 @@ NSString *AOReplaceAutomatically= @"Replace Automatically";
     noteFileSystemChanged:[_mainTask output]];
 
     [_mainTask release];
+    _mainTask = nil;
 
-    if ([_operationQueue count] > 0)
-	[self cleanArchive];
-    else {
-	[self endProgressPanel];
-	_archiveSessionInProgress = NO;
-	if (_terminateAfterArchiving == YES)
-	    [NSApp terminate:self];
-    }
+    [self advanceArchiveQueueAfterCurrentTask];
 
     _archivingCancelled = NO;
 }
@@ -215,8 +209,10 @@ NSString *AOReplaceAutomatically= @"Replace Automatically";
 
     [_mainTask terminate];
 
-    if (![dst isEqualToString:@""])
-	[fm removeFileAtPath:dst handler:nil];
+    if (dst != nil && ![dst isEqualToString:@""]) {
+	NSError *err = nil;
+	[fm removeItemAtPath:dst error:&err];
+    }
 }
 
 - (IBAction)changeArchiveType:(id)sender
@@ -387,15 +383,38 @@ NSString *AOReplaceAutomatically= @"Replace Automatically";
     return dstname;
 }
 
-- (NSFileHandle *)getFileHandleOfFile:(NSString *)filename // ???: What purpose of this method?
+- (NSArray *)standardizedAbsolutePaths:(NSArray *)paths
 {
     NSFileManager *fm;
+    NSMutableArray *absPaths;
+    NSUInteger i;
 
     fm = [NSFileManager defaultManager];
+    absPaths = [NSMutableArray arrayWithCapacity:[paths count]];
 
-    if (![fm fileExistsAtPath:filename])
-	[fm createFileAtPath:filename contents:nil attributes:nil];
-    return [NSFileHandle fileHandleForWritingAtPath:filename];
+    for (i = 0; i < [paths count]; i++) {
+	NSString *p, *abs;
+
+	p = [paths objectAtIndex:i];
+	abs = [p stringByExpandingTildeInPath];
+	abs = [abs stringByStandardizingPath];
+	if (![abs isAbsolutePath])
+	    abs = [[fm currentDirectoryPath] stringByAppendingPathComponent:abs];
+	[absPaths addObject:abs];
+    }
+    return absPaths;
+}
+
+- (void)advanceArchiveQueueAfterCurrentTask
+{
+    if ([_operationQueue count] > 0)
+	[self cleanArchive];
+    else {
+	[self endProgressPanel];
+	_archiveSessionInProgress = NO;
+	if (_terminateAfterArchiving == YES)
+	    [NSApp terminate:self];
+    }
 }
 
 #pragma mark -
@@ -413,6 +432,7 @@ NSString *AOReplaceAutomatically= @"Replace Automatically";
     status = [[NSMutableDictionary alloc] init];
 
     fm = [NSFileManager defaultManager];
+    srcs = [self standardizedAbsolutePaths:srcs];
     type = [_archiveTypeMenu indexOfSelectedItem];
     src = [srcs objectAtIndex:0];
     ai = [_archiveIndividuallyCheck state];
@@ -498,7 +518,6 @@ NSString *AOReplaceAutomatically= @"Replace Automatically";
     NSDictionary *status;
     NSFileManager *fm;
     NSMutableArray *exfiles;
-    NSMutableArray *srcbases;
     NSString *dst, *encoding, *password;
     enum archiveTypeMenuIndex type;
     int i, level;
@@ -550,19 +569,7 @@ NSString *AOReplaceAutomatically= @"Replace Automatically";
     if (![password isEqualToString:@""])
 	[_mainTask setArchivePassword:password];
 
-    if ([srcs count] == 1)
-	[_mainTask setInput:[[srcs objectAtIndex:0] lastPathComponent]];
-    else {
-	srcbases = [[NSMutableArray alloc] init];
-
-	for (i = 0; i < [srcs count]; i++)
-	    [srcbases addObject:
-		[[srcs objectAtIndex:i] lastPathComponent]];
-
-	[_mainTask setInput:srcbases];
-
-	[srcbases release];
-    }
+    [_mainTask setInput:srcs];
 
     if ([[status objectForKey:AODiscardRsrc] intValue])
 	[_mainTask setDiscardRsrc:YES];
@@ -570,11 +577,25 @@ NSString *AOReplaceAutomatically= @"Replace Automatically";
     if ([[status objectForKey:AOExcludeDSS] intValue])
 	[_mainTask setExcludeDSS:YES];
 
-    [_mainTask setCurrentDirectoryPath:
-	[[srcs objectAtIndex:0] stringByDeletingLastPathComponent]];
+    if ([[status objectForKey:AODiscardRsrc] intValue] &&
+	[[status objectForKey:AOExcludeDSS] intValue])
+	[_mainTask setExcludeMacFiles:YES];
+
+    [_mainTask setCurrentDirectoryPath:@"/"];
     [_mainTask setOutput:dst];
     [_mainTask setExcludedFiles:exfiles];
-    [_mainTask launch];
+
+    if (![_mainTask launch]) {
+	NSRunAlertPanel(@"",
+	    NSLocalizedString(@"Failed to start the archiver.", nil),
+	    nil, nil, nil);
+	[_mainTask release];
+	_mainTask = nil;
+	[exfiles release];
+	[status release];
+	[self advanceArchiveQueueAfterCurrentTask];
+	return;
+    }
 
     [_progressMessage setStringValue:
 	[NSString
